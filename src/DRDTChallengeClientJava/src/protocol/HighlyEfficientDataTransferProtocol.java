@@ -1,8 +1,6 @@
 package protocol;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 import client.*;
 
@@ -10,9 +8,10 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
     // change the following as you wish:
     private static final int HEADERSIZE = 1;   // number of header bytes in each packet
-    private static final int DATASIZE = 512;   // max. number of user data bytes in each packet
-    private static final int TIMEOUT = 8000;
+    private static final int DATASIZE = 200;   // max. number of user data bytes in each packet
+    private static final int TIMEOUT = 10000;
     private static final int TIMES_TO_CHECK_FOR_ACK = 100;
+    private static final int WINDOW_SIZE = 8;
 
     @Override
     public void sender() {
@@ -30,21 +29,28 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
 
         //send packets
-        while (
-                filePointer < fileContents.length
-//                highestReceivedAck != numPackets
-                ) {
+        while (filePointer < fileContents.length) {
 
             System.out.print("Number of packets to send: " + numPackets + "\n");
 
             for (packetCounter = 1; packetCounter <= numPackets; packetCounter++) {
 
-                Integer[] packetFragment = createPacket(packetCounter, fileContents, filePointer);
+                int upperBound = packetCounter + WINDOW_SIZE;
+                if (upperBound > numPackets) {
+                    upperBound = numPackets + 1;
+                }
 
-                if (packetFragment != null) {
-                    // send the packetFragment to the network layer
+                for (int i = packetCounter; i < upperBound; i++) {
+                    Integer[] packetFragment = createPacket(i, fileContents, filePointer);
                     getNetworkLayer().sendPacket(packetFragment);
-                    System.out.println("Sent one packet with header= " + packetFragment[0]);
+
+                    if (packetFragment != null) {
+                        // send the packetFragment to the network layer
+                        getNetworkLayer().sendPacket(packetFragment);
+                        System.out.println("Sent one packet with header= " + packetFragment[0]);
+                    }
+
+                    filePointer = (DATASIZE * i);
                 }
 
                 // check the highest received ACK
@@ -57,8 +63,9 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
                     packetCounter = highestReceivedAck;
                 }
 
-                filePointer = (DATASIZE * packetCounter);
+                filePointer = packetCounter * DATASIZE;
             }
+
         }
     }
 
@@ -112,7 +119,6 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
         Integer[] fileContents = new Integer[0];
         Set<Integer> receivedPackets = new HashSet<>();
-        boolean previousPacketsReceived = true;
         boolean stop = false;
 
         while (!stop) {
@@ -120,18 +126,36 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
             Integer[] packet = getNetworkLayer().receivePacket();
 
             if (packet != null) {
+
                 int oldlength = fileContents.length;
                 int datalen = packet.length - HEADERSIZE;
+                boolean tooEarly = false;
 
                 System.out.println("Received packet, length=" + packet.length + "  first byte=" + packet[0]);
 
+                boolean previousPacketsReceived = true;
                 for (int i = 1; i < packet[0]; i++) {
                     if (!receivedPackets.contains(i)) {
                         previousPacketsReceived = false;
                     }
                 }
-                //send ACK packet with the right header back
-                if (previousPacketsReceived) {
+
+                if (receivedPackets.size() > 0) {
+                    int j = Collections.max(receivedPackets);
+                    if (packet[0] - j > 1) {
+                        tooEarly = true;
+                        System.out.print("Packet " + packet[0] +
+                                " arrived too early. First wait for packet " + (packet[0] - 1) + "\n");
+                    }
+                }
+
+
+                /**
+                 * send ACK packet with the right header back if all previous packets are received
+                 *
+                 */
+
+                if (previousPacketsReceived && !tooEarly) {
                     Integer[] ackPacket = createEmptyPacket(packet[0]);
                     getNetworkLayer().sendPacket(ackPacket);
                     System.out.println("ACK sent for packet: " + packet[0]);
@@ -141,10 +165,9 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
                         System.out.print("Packet " + packet[0] +
                                 " has been added to the file on spot " + oldlength +
                                 " to " + (oldlength + datalen) + "\n");
+                        receivedPackets.add(packet[0]);
                     }
                 }
-
-                receivedPackets.add(packet[0]);
 
                 if (packet.length < DATASIZE) {
                     stop = true;
@@ -154,9 +177,10 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
                 try {
                     Thread.sleep(10);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    stop = true;
                 }
             }
+
         }
         // write to the output file
         Utils.setFileContents(fileContents, getFileID());
