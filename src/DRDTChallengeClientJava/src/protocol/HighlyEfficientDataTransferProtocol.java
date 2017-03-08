@@ -1,13 +1,18 @@
 package protocol;
 
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import client.*;
 
 public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
     // change the following as you wish:
-    static final int HEADERSIZE=1;   // number of header bytes in each packet
-    static final int DATASIZE=256;   // max. number of user data bytes in each packet
+    private static final int HEADERSIZE = 1;   // number of header bytes in each packet
+    private static final int DATASIZE = 512;   // max. number of user data bytes in each packet
+    private static final int TIMEOUT = 8000;
+    private static final int TIMES_TO_CHECK_FOR_ACK = 100;
 
     @Override
     public void sender() {
@@ -18,83 +23,144 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
         // keep track of where we are in the data
         int filePointer = 0;
+        int highestReceivedAck = 0;
+        int numPackets = fileContents.length / DATASIZE + 1;
+        int ackCounter;
+        int packetCounter;
 
-        // create a new packet of appropriate size
-        int datalen = Math.min(DATASIZE, fileContents.length - filePointer);
-        Integer[] pkt = new Integer[HEADERSIZE + datalen];
-        // write something random into the header byte
-        pkt[0] = 123;
-        // copy databytes from the input file into data part of the packet, i.e., after the header
-        System.arraycopy(fileContents, filePointer, pkt, HEADERSIZE, datalen);
 
-        // send the packet to the network layer
-        getNetworkLayer().sendPacket(pkt);
-        System.out.println("Sent one packet with header="+pkt[0]);
+        //send packets
+        while (
+                filePointer < fileContents.length
+//                highestReceivedAck != numPackets
+                ) {
 
-        // schedule a timer for 1000 ms into the future, just to show how that works:
-        client.Utils.Timeout.SetTimeout(1000, this, 28);
+            System.out.print("Number of packets to send: " + numPackets + "\n");
 
-        // and loop and sleep; you may use this loop to check for incoming acks...
-        boolean stop = false;
-        while (!stop) {
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                stop = true;
+            for (packetCounter = 1; packetCounter <= numPackets; packetCounter++) {
+
+                Integer[] packetFragment = createPacket(packetCounter, fileContents, filePointer);
+
+                if (packetFragment != null) {
+                    // send the packetFragment to the network layer
+                    getNetworkLayer().sendPacket(packetFragment);
+                    System.out.println("Sent one packet with header= " + packetFragment[0]);
+                }
+
+                // check the highest received ACK
+                ackCounter = numberOfReceivedAck();
+                if (ackCounter > highestReceivedAck) {
+                    highestReceivedAck = ackCounter;
+                }
+
+                if (highestReceivedAck < packetCounter && highestReceivedAck != 0) {
+                    packetCounter = highestReceivedAck;
+                }
+
+                filePointer = (DATASIZE * packetCounter);
             }
         }
+    }
 
+    // create a new packet of appropriate size
+    private Integer[] createPacket(int i, Integer[] fileContents, int filePointer) {
+        Integer[] pkt = null;
+        int datalen = Math.min(DATASIZE, fileContents.length - filePointer);
+        if (datalen > -1) {
+            pkt = new Integer[HEADERSIZE + datalen];
+            pkt[0] = i;
+            System.arraycopy(fileContents, filePointer, pkt, HEADERSIZE, datalen);
+        }
+        return pkt;
+    }
+
+    //check for acks TIMES_TO_CHECK_FOR_ACK times within the timeOUT.
+    private int numberOfReceivedAck() {
+        int ackCounter;
+
+        for (int i = 0; i <= TIMES_TO_CHECK_FOR_ACK; i++) {
+            try {
+                Thread.sleep(TIMEOUT / TIMES_TO_CHECK_FOR_ACK);
+                Integer[] ackPacket = getNetworkLayer().receivePacket();
+                if (ackPacket != null) {
+                    ackCounter = ackPacket[0];
+                    System.out.print("received ack for packet with header= " + ackCounter + "\n");
+                    return ackCounter;
+                }
+            } catch (InterruptedException e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    // create a new packet of appropriate size
+    private Integer[] createEmptyPacket(int i) {
+        return new Integer[]{i};
     }
 
     @Override
     public void TimeoutElapsed(Object tag) {
-        int z=(Integer)tag;
+        int z = (Integer) tag;
         // handle expiration of the timeout:
-        System.out.println("Timer expired with tag="+z);
+        System.out.println("Timer expired with tag=" + z);
     }
 
     @Override
     public void receiver() {
         System.out.println("Receiving...");
 
-        // create the array that will contain the file contents
-        // note: we don't know yet how large the file will be, so the easiest (but not most efficient)
-        //   is to reallocate the array every time we find out there's more data
         Integer[] fileContents = new Integer[0];
-
-        // loop until we are done receiving the file
+        Set<Integer> receivedPackets = new HashSet<>();
+        boolean previousPacketsReceived = true;
         boolean stop = false;
+
         while (!stop) {
 
-            // try to receive a packet from the network layer
             Integer[] packet = getNetworkLayer().receivePacket();
 
-            // if we indeed received a packet
             if (packet != null) {
+                int oldlength = fileContents.length;
+                int datalen = packet.length - HEADERSIZE;
 
-                // tell the user
-                System.out.println("Received packet, length="+packet.length+"  first byte="+packet[0] );
+                System.out.println("Received packet, length=" + packet.length + "  first byte=" + packet[0]);
 
-                // append the packet's data part (excluding the header) to the fileContents array, first making it larger
-                int oldlength=fileContents.length;
-                int datalen= packet.length - HEADERSIZE;
-                fileContents = Arrays.copyOf(fileContents, oldlength+datalen);
-                System.arraycopy(packet, HEADERSIZE, fileContents, oldlength, datalen);
+                for (int i = 1; i < packet[0]; i++) {
+                    if (!receivedPackets.contains(i)) {
+                        previousPacketsReceived = false;
+                    }
+                }
+                //send ACK packet with the right header back
+                if (previousPacketsReceived) {
+                    Integer[] ackPacket = createEmptyPacket(packet[0]);
+                    getNetworkLayer().sendPacket(ackPacket);
+                    System.out.println("ACK sent for packet: " + packet[0]);
+                    if (!receivedPackets.contains(packet[0])) {
+                        fileContents = Arrays.copyOf(fileContents, oldlength + datalen);
+                        System.arraycopy(packet, HEADERSIZE, fileContents, oldlength, datalen);
+                        System.out.print("Packet " + packet[0] +
+                                " has been added to the file on spot " + oldlength +
+                                " to " + (oldlength + datalen) + "\n");
+                    }
+                }
 
-                // and let's just hope the file is now complete
-                stop=true;
+                receivedPackets.add(packet[0]);
 
-            }else{
-                // wait ~10ms (or however long the OS makes us wait) before trying again
+                if (packet.length < DATASIZE) {
+                    stop = true;
+                }
+
+            } else {
                 try {
                     Thread.sleep(10);
                 } catch (InterruptedException e) {
-                    stop = true;
+                    e.printStackTrace();
                 }
             }
         }
-
         // write to the output file
         Utils.setFileContents(fileContents, getFileID());
     }
 }
+
+
