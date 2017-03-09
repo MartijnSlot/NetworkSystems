@@ -3,7 +3,7 @@ import java.io.*;
 class LongestPrefixMatcher {
 	// TODO: Request access token from your student assistant
 	public static final String ACCESS_TOKEN = "s1234567_abcde";
-	
+
 	public static final String ROUTES_FILE  = "routes.txt";
 	public static final String LOOKUP_FILE  = "lookup.txt";
 
@@ -30,8 +30,10 @@ class LongestPrefixMatcher {
 	 *                     of the address range (notation ip/prefixLength)
 	 * @param portNumber The port number the IP block should route to
 	 */
-	private void addRoute(int ip, byte prefixLength, int portNumber) { 
-		// TODO: Store this route for later use in lookup() method
+	private void addRoute(int ip, byte prefixLength, int portNumber) {
+	    Map<Integer, Integer> ("routes" + portNumber) = new HashMap<>();
+	    routes.put(ip, prefixLength);
+
 	}
 
 	/**
@@ -101,6 +103,7 @@ class LongestPrefixMatcher {
 			br = new BufferedReader(new FileReader(LOOKUP_FILE));
 			int count = 0;
 			StringBuilder sb = new StringBuilder(1024 * 4);
+
 			// writing each lookup result to disk separately is very slow;
 			// therefore, we collect up to 1024 results into a string and
 			// write that all at once.
