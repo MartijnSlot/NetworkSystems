@@ -8,7 +8,7 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
     // change the following as you wish:
     private static final int HEADERSIZE = 1;   // number of header bytes in each packet
-    private static final int DATASIZE = 400;   // max. number of user data bytes in each packet
+    private static final int DATASIZE = 256;   // max. number of user data bytes in each packet
     private static final int TIMEOUT = 8000;
     private static final int TIMES_TO_CHECK_FOR_ACK = 100;
     private static final int WINDOW_SIZE = 3;
@@ -101,6 +101,15 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
         return 0;
     }
 
+    private boolean previousAcksReceived(Integer[] packet, Set<Integer> receivedPackets) {
+        for (int i = 1; i < packet[0]; i++) {
+            if (!receivedPackets.contains(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // create a new packet of appropriate size
     private Integer[] createEmptyPacket(int i) {
         return new Integer[]{i};
@@ -166,6 +175,7 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
                                 " has been added to the file on spot " + oldlength +
                                 " to " + (oldlength + datalen) + "\n");
                         receivedPackets.add(packet[0]);
+
                         if (packet.length < DATASIZE) {
                             stop = true;
                         }

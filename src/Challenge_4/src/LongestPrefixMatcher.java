@@ -1,6 +1,5 @@
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 class LongestPrefixMatcher {
 	// TODO: Request access token from your student assistant
@@ -35,7 +34,7 @@ class LongestPrefixMatcher {
 	 * @param portNumber The port number the IP block should route to
 	 */
 	private void addRoute(int ip, byte prefixLength, int portNumber) {
-        Integer[] prefixPort = new Integer[2];
+	    Integer[] prefixPort = new Integer[2];
         int shiftedIP = ip >> (32 - prefixLength);
         prefixPort[0] = prefixLength & 0xff;
         prefixPort[1] = portNumber;
@@ -48,15 +47,14 @@ class LongestPrefixMatcher {
 	 * @return The port number this IP maps to
 	 */
 	private int lookup(int ip) {
-        for (Byte prefixLength = 16; prefixLength <= 24; prefixLength++) {
+        for (int prefixLength = 24; prefixLength >= 8; prefixLength--) {
             int shiftedLookupIP = ip >> (32 - prefixLength);
-//            System.out.print(ipToHuman(shiftedLookupIP) + "\n");
-            if (routes.keySet().contains(shiftedLookupIP) && getPrefix(shiftedLookupIP) == (prefixLength)) {
+            if (routes.keySet().contains(shiftedLookupIP) && getPrefix(shiftedLookupIP) == prefixLength) {
                 return getPort(shiftedLookupIP);
             }
         }
-		return -1;
-	}
+        return -1;
+    }
 
     private int getPort(int shiftedLookupIP) {
 	    return routes.get(shiftedLookupIP)[1];
