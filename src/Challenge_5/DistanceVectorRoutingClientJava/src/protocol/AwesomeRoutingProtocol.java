@@ -3,7 +3,9 @@ package protocol;
 import client.*;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class AwesomeRoutingProtocol implements IRoutingProtocol {
     private LinkLayer linkLayer;
@@ -18,7 +20,7 @@ public class AwesomeRoutingProtocol implements IRoutingProtocol {
         myAddress = this.linkLayer.getOwnAddress();
         System.out.print("My address: " + myAddress +"\n");
         DataTable InitDt = new DataTable(3);
-        InitDt = createAndFillDateTable(myAddress,0,-1,0, InitDt);
+        InitDt = fillDateTable(myAddress,0,-1,0, InitDt);
         Packet pkt = new Packet(myAddress, 0, InitDt);
         this.linkLayer.transmit(pkt);
     }
@@ -26,6 +28,7 @@ public class AwesomeRoutingProtocol implements IRoutingProtocol {
 
     @Override
     public void tick(Packet[] packets) {
+        Set<Integer> setToRemove = new HashSet<>();
 
         // Get the address of this node
         System.out.println("tick; received " + packets.length + " packets");
@@ -39,14 +42,24 @@ public class AwesomeRoutingProtocol implements IRoutingProtocol {
 
             for (int row = 0; row < IncomingDT.getNRows(); row++) {
                 DummyRoute r = new DummyRoute();
+
                 r.nextHop = neighbour;
                 r.cost = (linkcost + IncomingDT.get(row, 1));
                 int dest = IncomingDT.get(row, 0);
+                Set<Integer> neighbours = determineNeighbours();
 
                 if (r.cost == -1) {
                     for (int destToRemove : myForwardingTable.keySet()) {
                         if(myForwardingTable.get(destToRemove).nextHop == neighbour) {
-                            myForwardingTable.remove(destToRemove);
+                            setToRemove.add(destToRemove);
+                            for (int noaber : neighbours) {
+                                if (myForwardingTable.get(noaber).cost != -1) {
+                                    DataTable emptyDT = new DataTable(3);
+                                    emptyDT = fillDateTable(myAddress, -1, noaber, 0, emptyDT);
+                                    Packet pkt = new Packet(myAddress, 0, emptyDT);
+                                    this.linkLayer.transmit(pkt);
+                                }
+                            }
                         }
                     }
                 }
@@ -59,11 +72,17 @@ public class AwesomeRoutingProtocol implements IRoutingProtocol {
             }
         }
 
+        for (int remover : setToRemove) {
+            myForwardingTable.remove(remover);
+            System.out.println("Removed Destination: " + remover);
+
+        }
+
         int row = 0;
         DataTable OutgoingDT = new DataTable(3);
         for (int dest : myForwardingTable.keySet()) {
             DummyRoute dr = myForwardingTable.get(dest);
-            OutgoingDT = createAndFillDateTable(dest, dr.cost, dr.nextHop, row, OutgoingDT);
+            OutgoingDT = fillDateTable(dest, dr.cost, dr.nextHop, row, OutgoingDT);
             row++;
         }
 
@@ -72,12 +91,19 @@ public class AwesomeRoutingProtocol implements IRoutingProtocol {
         Packet pkt = new Packet(myAddress, 0, OutgoingDT);
         this.linkLayer.transmit(pkt);
 
-        /*
-        Instead of using Packet with a DataTable you may also use Packet with
-        a byte[] as data part, if really you want to send your own data structure yourself.
-        Read the JavaDoc of Packet to see how you can do this.
-        PLEASE NOTE! Although we provide this option we do not support it.
-        */
+    }
+
+    private Set<Integer> determineNeighbours() {
+        Set<Integer> neighbours = new HashSet<>();
+        if (!myForwardingTable.isEmpty()) {
+            for (int noaber : myForwardingTable.keySet()) {
+                if (myForwardingTable.get(noaber).cost != -1) {
+                    neighbours.add(noaber);
+                }
+            }
+        }
+
+        return neighbours;
     }
 
     public HashMap<Integer, Integer> getForwardingTable() {
@@ -95,7 +121,7 @@ public class AwesomeRoutingProtocol implements IRoutingProtocol {
         return ft;
     }
 
-    private DataTable createAndFillDateTable(int dest, int cost , int neigh, int row, DataTable dt) {
+    private DataTable fillDateTable(int dest, int cost , int neigh, int row, DataTable dt) {
         dt.set(row, 0, dest);
         dt.set(row, 1, cost);
         dt.set(row, 2, neigh);
