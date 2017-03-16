@@ -8,8 +8,8 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
     // change the following as you wish:
     private static final int HEADERSIZE = 1;   // number of header bytes in each packet
-    private static final int DATASIZE = 512;   // max. number of user data bytes in each packet
-    private static final int WINDOWSIZE = 3;
+    private static final int DATASIZE = 400;   // max. number of user data bytes in each packet
+    private static final int WINDOWSIZE = 5;
     private static final int DELAYTIME = 10000;
     private static final int NUMBEROFACKCHECKS = 100;
 
