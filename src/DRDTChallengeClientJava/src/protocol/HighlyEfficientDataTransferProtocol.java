@@ -121,7 +121,7 @@ public class HighlyEfficientDataTransferProtocol extends IRDTProtocol {
         // handle expiration of the timeout:
         System.out.println("Timer expired with tag=" + z);
     }
-    //TODO netjes maken en acks terugsturen binnen de window die daarna niet meer verstuurd worden.
+
     @Override
     public void receiver() {
         System.out.println("Receiving...");

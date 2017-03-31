@@ -8,8 +8,8 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
     // change the following as you wish:
     private static final int HEADERSIZE = 1;   // number of header bytes in each packet
-    private static final int DATASIZE = 400;   // max. number of user data bytes in each packet
-    private static final int WINDOWSIZE = 5;
+    private static final int DATASIZE = 499;   // max. number of user data bytes in each packet
+    private static final int WINDOWSIZE = 15;
     private static final int DELAYTIME = 10000;
     private static final int NUMBEROFACKCHECKS = 100;
 
@@ -36,7 +36,7 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
             //define window boundaries
             if (receivedAcks.isEmpty()) {
                 lowerbound = 1;
-                upperbound = 3;
+                upperbound = WINDOWSIZE;
             } else {
                 lowerbound = determineLowerbound(receivedAcks);
                 upperbound = determineUpperbound(receivedAcks, numberOfFragments);
@@ -49,7 +49,6 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
                     Integer[] pkt = createPacket(fragmentCounter, fileContents, filePointer);
                     getNetworkLayer().sendPacket(pkt);
                     System.out.println("Sent one packet with header=" + pkt[0]);
-//                    System.out.print(Arrays.toString(pkt));
                 }
             }
 
@@ -102,7 +101,7 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
                     sendAck(packet);
                 }
 
-                if (packet.length < DATASIZE && packetMap.keySet().size() == Collections.max(packetMap.keySet())) stop = true;
+                if (!allPacketsReceived(packetMap, highestPacket) && packetMap.keySet().size() == Collections.max(packetMap.keySet())) stop = true;
 
 
             } else {
@@ -124,6 +123,16 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
         // write to the output file
         Utils.setFileContents(fileContents, getFileID());
+    }
+
+    private boolean allPacketsReceived(Map<Integer, Integer[]> packetMap, int highestPacket) {
+        boolean allPacketsReceived = true;
+        for (int i = 0; i < highestPacket; i++) {
+            if (!packetMap.keySet().contains(i) && packetMap.get(highestPacket).length < DATASIZE) {
+                allPacketsReceived = false;
+            }
+        }
+        return allPacketsReceived;
     }
 
     // create a new packet of appropriate size
