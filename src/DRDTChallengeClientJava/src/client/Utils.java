@@ -90,6 +90,26 @@ public class Utils {
 		private static Thread eventTriggerThread;
 		private static boolean started = false;
 		private static ReentrantLock lock = new ReentrantLock();
+		private static Map<Object, AbstractMap.SimpleEntry<Date,ITimeoutEventHandler>> packetToDate = new HashMap<>();
+
+		/**
+		 * CODE
+		 * Stop timeout of given tag (acknowledged packet)
+		 */
+		public static void stopTimeOut(Object tag) {
+			if(tag != null) {
+				Integer[] pkt = (Integer[])tag;
+				if(packetToDate.get(tag) != null) {
+					Date elapsedMoment = packetToDate.get(tag).getKey();
+					ITimeoutEventHandler handler = packetToDate.get(tag).getValue();
+					if(elapsedMoment != null && handler != null) {
+						if(eventHandlers.get(elapsedMoment) != null && eventHandlers.get(elapsedMoment).get(handler) != null) {
+							eventHandlers.get(elapsedMoment).get(handler).remove(tag);
+						}
+					}
+				}
+			}
+		}
 
 		/**
 		 * Starts the helper thread

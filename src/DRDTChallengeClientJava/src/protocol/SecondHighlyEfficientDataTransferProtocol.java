@@ -8,10 +8,12 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
     // change the following as you wish:
     private static final int HEADERSIZE = 1;   // number of header bytes in each packet
-    private static final int DATASIZE = 499;   // max. number of user data bytes in each packet
-    private static final int WINDOWSIZE = 15;
-    private static final int DELAYTIME = 10000;
+    private static final int DATASIZE = 220;   // max. number of user data bytes in each packet
+    private static final int WINDOWSIZE = 22;
+    private static final int DELAYTIME = 8000;
+    private static final int SENDTIMER = 4000;
     private static final int NUMBEROFACKCHECKS = 100;
+    private Map<Integer, Boolean> sendPacketStatus = new HashMap<>();
 
     @Override
     public void sender() {
@@ -19,9 +21,11 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
         // read from the input file
         Integer[] fileContents = Utils.getFileContents(getFileID());
-        int filePointer = 0;
+        int filePointer;
         Set<Integer> receivedAcks = new HashSet<>();
+
         int numberOfFragments = fileContents.length / DATASIZE + 1;
+
         System.out.println("Number of packets to send in total = " + numberOfFragments);
 
 
@@ -44,19 +48,16 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
 
             // create and send a new packet of appropriate size
             for (fragmentCounter = lowerbound; fragmentCounter <= upperbound; fragmentCounter++) {
-                if (!receivedAcks.contains(fragmentCounter)) {
-                    filePointer = DATASIZE * (fragmentCounter - 1);
-                    Integer[] pkt = createPacket(fragmentCounter, fileContents, filePointer);
-                    getNetworkLayer().sendPacket(pkt);
-                    System.out.println("Sent one packet with header=" + pkt[0]);
+                if (!receivedAcks.contains(fragmentCounter) && (!sendPacketStatus.containsKey(fragmentCounter) || sendPacketStatus.get(fragmentCounter))) {
+                        filePointer = DATASIZE * (fragmentCounter - 1);
+                        Integer[] pkt = createPacket(fragmentCounter, fileContents, filePointer);
+                        getNetworkLayer().sendPacket(pkt);
+                        client.Utils.Timeout.SetTimeout(SENDTIMER, this, pkt[0]);
+                        sendPacketStatus.put(fragmentCounter, false);
+                        System.out.println("Sent one packet with header=" + pkt[0]);
                 }
             }
 
-
-            // schedule a timer for 1000 ms into the future, just to show how that works:
-//        client.Utils.Timeout.SetTimeout(DELAYTIME, this, 28);
-
-            // and loop and sleep; you may use this loop to check for incoming acks...
             receivedAcks = checkForAcks(receivedAcks);
         }
     }
@@ -94,12 +95,13 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
                 if (!packetMap.keySet().contains(packetIndex)) {
                     Integer[] packetData = Arrays.copyOfRange(packet, 1, packet.length);
                     packetMap.put(packetIndex, packetData);
-                    sendAck(packet);
                 }
 
-                if (packetIndex == Collections.max(packetMap.keySet()) - WINDOWSIZE) {
-                    sendAck(packet);
-                }
+                sendAck(packet);
+//
+//                if (packetIndex == Collections.max(packetMap.keySet()) - WINDOWSIZE) {
+//                    sendAck(packet);
+//                }
 
                 if (!allPacketsReceived(packetMap, highestPacket) && packetMap.keySet().size() == Collections.max(packetMap.keySet())) stop = true;
 
@@ -183,8 +185,8 @@ public class SecondHighlyEfficientDataTransferProtocol extends IRDTProtocol {
     @Override
     public void TimeoutElapsed(Object tag) {
         int z=(Integer)tag;
-        // handle expiration of the timeout:
-        System.out.println("Timer expired with tag="+z);
+        sendPacketStatus.put(z, true);
+//        System.out.println("Timer expired with tag="+z);
     }
 
     private Set<Integer> checkForAcks(Set<Integer> receivedAcks) {
