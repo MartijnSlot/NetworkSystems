@@ -25,10 +25,10 @@ public class Program {
 
 	// Choose ID of test file to transmit: 1, 2, 3, 4, 5
 	// Sizes in bytes are: 248, 2085, 6267, 21067, 53228
-	private static int file = 3;
+	private static int file = 4;
 
 	// Change to your protocol implementation
-	private static IRDTProtocol protocolImpl = new SecondHighlyEfficientDataTransferProtocol();
+	private static IRDTProtocol protocolImpl = new ThirdHighlyEfficientDataTransferProtocol();
 
 	// Challenge server address
 	private static String serverAddress = "netsys.student.utwente.nl";
